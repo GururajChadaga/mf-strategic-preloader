@@ -1,0 +1,34 @@
+{
+  "name": "dynamic-remotes-webpack-pure-runtime",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "concurrently \"npm start --workspace=hostbuildtime\" \"npm start --workspace=app2\" \"npm start --workspace=app3\"",
+    "build": "concurrently \"npm run build --workspace=hostbuildtime\" \"npm run build --workspace=app2\" \"npm run build --workspace=app3\"",
+    "cleandist": "rm -rf app*/dist hostbuildtime/dist",
+    "cleanmodules": "rm -rf app*/node_modules hostbuildtime/node_modules node_modules",
+    "cleanall": "npm run cleandist && npm run cleanmodules",
+    "cleanstart": "npm run cleandist && npm start",
+    "cleanbuild": "npm run cleandist && npm run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "workspaces": [
+    "hostbuildtime",
+    "app2",
+    "app3"
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "webpack-bundle-analyzer": "^4.10.2"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.3",
+    "chart.js": "^4.5.1",
+    "core-js": "3.16.0",
+    "react-router-dom": "^7.9.4",
+    "three": "^0.180.0"
+  }
+}
