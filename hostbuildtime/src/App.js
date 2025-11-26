@@ -5,6 +5,7 @@ import { Chart, registerables } from "chart.js";
 import * as THREE from "three";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { loadRemote } from "@module-federation/enhanced/runtime";
+import StrategicLoader from "./StrategicLoader";
 
 Chart.register(...registerables);
 
@@ -37,7 +38,9 @@ function useDynamicRemote({ scope, module }) {
         const startTime = performance.now();
         const { default: Component } = await loadRemote(`${scope}/${module}`);
         const loadTime = performance.now() - startTime;
-        console.log(`[Dynamic Load] ${scope}/${module} loaded in ${loadTime.toFixed(2)}ms`);
+        console.log(
+          `[Dynamic Load] ${scope}/${module} loaded in ${loadTime.toFixed(2)}ms`,
+        );
         setComponent(() => Component);
       } catch (err) {
         console.error(`[Dynamic Load] Error loading ${scope}/${module}:`, err);
@@ -98,29 +101,124 @@ function Navigation() {
 
 // Home page component
 function HomePage() {
+  const [App2Widget, setApp2Widget] = useState(null);
+  const [App3Widget, setApp3Widget] = useState(null);
+  const [loadingApp2, setLoadingApp2] = useState(true);
+  const [loadingApp3, setLoadingApp3] = useState(true);
+  const [errorApp2, setErrorApp2] = useState(null);
+  const [errorApp3, setErrorApp3] = useState(null);
+
+  useEffect(() => {
+    const loader = new StrategicLoader("loadRemote");
+
+    loader.loadStrategic(
+      [
+        { name: "app2/Widget", priority: "low" },
+        { name: "app3/Widget", priority: "critical" },
+      ],
+      (name, mod) => {
+        const Component = mod?.default;
+        if (!Component) {
+          const err = new Error(
+            `[HomePage] Remote ${name} did not provide a default export`,
+          );
+          if (name === "app2/Widget") {
+            setErrorApp2(err);
+            setLoadingApp2(false);
+          } else if (name === "app3/Widget") {
+            setErrorApp3(err);
+            setLoadingApp3(false);
+          }
+          return;
+        }
+
+        if (name === "app2/Widget") {
+          setApp2Widget(() => Component);
+          setLoadingApp2(false);
+        } else if (name === "app3/Widget") {
+          setApp3Widget(() => Component);
+          setLoadingApp3(false);
+        }
+      },
+      (name, error) => {
+        console.warn(`[HomePage] Error loading ${name}:`, error);
+        if (name === "app2/Widget") {
+          setErrorApp2(error);
+          setLoadingApp2(false);
+        } else if (name === "app3/Widget") {
+          setErrorApp3(error);
+          setLoadingApp3(false);
+        }
+      },
+    );
+  }, []);
+
   return (
     <div style={{ padding: "2em", textAlign: "center" }}>
       <h2>Welcome to Module Federation Enhanced</h2>
       <p>This is the home page demonstrating React Router navigation.</p>
       <p>Navigate to different sections using the links above.</p>
 
-      <div style={{
-        marginTop: "2em",
-        padding: "1em",
-        backgroundColor: "#f5f5f5",
-        borderRadius: "4px",
-        fontSize: "0.9em"
-      }}>
-        <h3>ℹ️ Remote Preloading</h3>
+      <div
+        style={{
+          marginTop: "2em",
+          padding: "1em",
+          backgroundColor: "#f5f5f5",
+          borderRadius: "4px",
+          fontSize: "0.9em",
+        }}
+      >
+        <h3>ℹ️ Remote Loading Strategy</h3>
         <p style={{ fontSize: "0.9em", color: "#666" }}>
-          Remotes (app2 and app3) are preloaded in bootstrap.js before the app renders.
+          On this page, app2 and app3 widgets are loaded via StrategicLoader("loadRemote")
+          with priorities: app3 = critical, app2 = low.
         </p>
         <p style={{ fontSize: "0.9em", color: "#666" }}>
-          Navigate to "Remotes" to see instant loading with no waterfall requests!
+          No bootstrap preloading is used; loading happens here with priority-aware scheduling.
         </p>
-        <p style={{ fontSize: "0.85em", color: "#999", marginTop: "1em" }}>
-          Check the console for preload timing logs.
+        <p
+          style={{
+            fontSize: "0.85em",
+            color: "#999",
+            marginTop: "1em",
+          }}
+        >
+          Check the console for strategic loading logs.
         </p>
+      </div>
+
+      <div style={{ marginTop: "3em" }}>
+        <h3>Remote Widgets on Home</h3>
+        <div
+          style={{
+            display: "flex",
+            gap: "2em",
+            justifyContent: "center",
+            marginTop: "1.5em",
+          }}
+        >
+          <div style={{ minWidth: "260px" }}>
+            <h4>App 2 Widget (low priority)</h4>
+            {loadingApp2 && <p>Loading app2 widget...</p>}
+            {errorApp2 && (
+              <p style={{ color: "red" }}>
+                Error loading app2: {errorApp2.message}
+              </p>
+            )}
+            {App2Widget && <App2Widget />}
+          </div>
+
+          <div style={{ minWidth: "260px" }}>
+            <h4>App 3 Widget (critical)</h4>
+            {loadingApp3 && <p>Loading app3 widget...</p>}
+            {errorApp3 && (
+              <p style={{ color: "red" }}>
+                Error loading app3: {errorApp3.message}
+              </p>
+            )}
+            {App3Widget && <App3Widget />}
+          </div>
+        </div>
       </div>
     </div>
   );

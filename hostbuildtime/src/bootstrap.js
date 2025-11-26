@@ -25,25 +25,25 @@ async function initApp() {
   );
 
   // Step 2: Strategic preloading with priorities
-  console.log('[Bootstrap] Starting strategic preloading...');
-  const preloadStart = performance.now();
+  // console.log('[Bootstrap] Starting strategic preloading...');
+  // const preloadStart = performance.now();
 
-  try {
-    const preloader = new StrategicLoader('preloadRemote');
+  // try {
+  //   const preloader = new StrategicLoader('preloadRemote');
 
-    // Configure remotes with priorities
-    // Change the order and priority here to control preload behavior
-    await preloader.preloadStrategic([
-      { name: 'app3', priority: 'low' }, // Blocking
-      { name: 'app2', priority: 'high' }, // Idle time
-    ]);
+  //   // Configure remotes with priorities
+  //   // Change the order and priority here to control preload behavior
+  //   await preloader.loadStrategic([
+  //     { name: 'app3', priority: 'critical' }, // Blocking
+  //     { name: 'app2', priority: 'high' }, // Idle time
+  //   ]);
 
-    console.log(
-      `[Bootstrap] Strategic preloading initiated in ${(performance.now() - preloadStart).toFixed(2)}ms`,
-    );
-  } catch (error) {
-    console.error('[Bootstrap] Error during strategic preloading:', error);
-  }
+  //   console.log(
+  //     `[Bootstrap] Strategic preloading initiated in ${(performance.now() - preloadStart).toFixed(2)}ms`,
+  //   );
+  // } catch (error) {
+  //   console.error('[Bootstrap] Error during strategic preloading:', error);
+  // }
 
   // Step 3: Render the app
   console.log('[Bootstrap] Rendering app...');
