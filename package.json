@@ -1,13 +1,13 @@
 {
-  "name": "dynamic-remotes-webpack-pure-runtime",
+  "name": "mf-strategic-preloader",
   "version": "1.0.0",
-  "description": "",
+  "description": "Module Federation with strategic preloading",
   "main": "index.js",
   "scripts": {
     "start": "concurrently \"npm start --workspace=hostbuildtime\" \"npm start --workspace=app2\" \"npm start --workspace=app3\"",
     "build": "concurrently \"npm run build --workspace=hostbuildtime\" \"npm run build --workspace=app2\" \"npm run build --workspace=app3\"",
-    "cleandist": "rm -rf app*/dist hostbuildtime/dist",
-    "cleanmodules": "rm -rf app*/node_modules hostbuildtime/node_modules node_modules",
+    "cleandist": "rm -rf app2/dist app3/dist hostbuildtime/dist",
+    "cleanmodules": "rm -rf app2/node_modules app3/node_modules hostbuildtime/node_modules node_modules",
     "cleanall": "npm run cleandist && npm run cleanmodules",
     "cleanstart": "npm run cleandist && npm start",
     "cleanbuild": "npm run cleandist && npm run build"
