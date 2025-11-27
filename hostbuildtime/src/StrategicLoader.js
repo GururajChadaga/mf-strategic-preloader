@@ -3,46 +3,64 @@ import { preloadRemote, loadRemote } from '@module-federation/enhanced/runtime';
 /**
  * Strategic Loader for Module Federation remotes.
  * Implements priority-based loading with idle-time optimization.
- * Supports both 'preloadRemote' and 'loadRemote' modes.
+ *
+ * Use `preloadRemoteStrategic()` to preload remotes (manifests only).
+ * Use `loadRemoteStrategic()` to load remotes and get module factories.
  */
 class StrategicLoader {
-  /**
-   * @param {'preloadRemote' | 'loadRemote'} mode
-   */
-  constructor(mode = 'preloadRemote') {
-    switch (mode) {
-      case 'preloadRemote': {
-        this.invoker = name =>
-          preloadRemote([
-            {
-              nameOrAlias: name,
-            },
-          ]);
-        break;
-      }
-      case 'loadRemote': {
-        this.invoker = key => loadRemote(key);
-        break;
-      }
-      default: {
-        throw new Error(
-          `[StrategicLoader] Unsupported mode: ${mode}. Use 'preloadRemote' or 'loadRemote'.`,
-        );
-      }
-    }
-
+  constructor() {
+    /** @type {(name: string) => Promise<any>} */
+    this.invoker = null;
     /** @type {Array<{remote: string, priority: number}>} */
     this.preloadQueue = [];
     this.isPreloading = false;
   }
 
   /**
+   * Strategically preload remotes using `preloadRemote`.
+   * @param {Array<{ name: string, priority: 'critical' | 'high' | 'low' }>} remotes
+   * @returns {Promise<Map<string, any>>} Map of remote name to preload result
+   */
+  preloadRemoteStrategic(remotes) {
+    this.invoker = name =>
+      preloadRemote([
+        {
+          nameOrAlias: name,
+        },
+      ]);
+    return this.loadStrategic(remotes);
+  }
+
+  /**
+   * Strategically load remotes using `loadRemote`.
+   * @param {Array<{ name: string, priority: 'critical' | 'high' | 'low' }>} remotes
+   * @returns {Promise<Map<string, any>>} Map of remote name to module factory
+   */
+  loadRemoteStrategic(remotes) {
+    this.invoker = key => loadRemote(key);
+    return this.loadStrategic(remotes);
+  }
+
+  /**
+   * Load a single remote with priority (convenience method for loadMicroFrontend).
+   * @param {string} name - Remote name (e.g., "app2/Widget")
+   * @param {'critical' | 'high' | 'low'} [priority='high'] - Loading priority
+   * @returns {Promise<any>} The loaded module factory
+   */
+  async loadRemoteStrategicSingle(name, priority = 'high') {
+    const results = await this.loadRemoteStrategic([{ name, priority }]);
+    return results.get(name);
+  }
+
+  /**
    * Load remotes with strategic priority handling
    * @param {Array<{ name: string, priority: 'critical' | 'high' | 'low' }>} remotes
-   * @param {(name: string, mod: any) => void} [onLoaded]
-   * @param {(name: string, error: unknown) => void} [onError]
+   * @returns {Promise<Map<string, any>>} Map of remote name to loaded module
    */
-  async loadStrategic(remotes, onLoaded, onError) {
+  async loadStrategic(remotes) {
+    const results = new Map();
+    const errors = new Map();
+
     // Sort by priority
     const priorityMap = { critical: 0, high: 1, low: 2 };
     const sorted = remotes.sort(
@@ -53,76 +71,75 @@ class StrategicLoader {
     const critical = sorted.filter(r => r.priority === 'critical');
     if (critical.length > 0) {
       console.log(
-        '[StrategicLoader] Preloading CRITICAL remotes (parallel):',
+        '[StrategicLoader] Loading CRITICAL remotes (parallel):',
         critical.map(r => r.name),
       );
 
       await Promise.all(
-        critical.map(r => {
+        critical.map(async r => {
           const start = performance.now();
           console.log(
-            `[StrategicLoader] [START] ${r.name} (critical) preload`,
+            `[StrategicLoader] [START] ${r.name} (critical) load`,
           );
 
-          return this.invoker(r.name)
-            .then(mod => {
-              const duration = performance.now() - start;
-              console.log(
-                `[StrategicLoader] [DONE] ${r.name} (critical) preloaded in ${duration.toFixed(
-                  2,
-                )}ms`,
-              );
-              if (onLoaded) {
-                onLoaded(r.name, mod);
-              }
-            })
-            .catch(error => {
-              console.warn(
-                `[StrategicLoader] Preload failed for CRITICAL remote ${r.name}:`,
-                error,
-              );
-              if (onError) {
-                onError(r.name, error);
-              }
-            });
+          try {
+            const mod = await this.invoker(r.name);
+            const duration = performance.now() - start;
+            console.log(
+              `[StrategicLoader] [DONE] ${r.name} (critical) loaded in ${duration.toFixed(
+                2,
+              )}ms`,
+            );
+            results.set(r.name, mod);
+          } catch (error) {
+            console.warn(
+              `[StrategicLoader] Load failed for CRITICAL remote ${r.name}:`,
+              error,
+            );
+            errors.set(r.name, error);
+          }
         }),
       );
 
-      console.log('[StrategicLoader] All CRITICAL remotes preloaded');
+      console.log('[StrategicLoader] All CRITICAL remotes loaded');
     }
 
     // Queue others for idle time
     const others = sorted.filter(r => r.priority !== 'critical');
-    this.queueForIdlePreload(others, onLoaded, onError);
+    if (others.length > 0) {
+      this.queueForIdlePreload(others, results, errors);
+    }
+
+    return results;
   }
 
   /**
-   * Queue remotes for idle-time preloading
+   * Queue remotes for idle-time loading
    * @param {Array<{ name: string, priority: string }>} remotes
-   * @param {(name: string, mod: any) => void} [onLoaded]
-   * @param {(name: string, error: unknown) => void} [onError]
+   * @param {Map<string, any>} results - Map to store loaded modules
+   * @param {Map<string, Error>} errors - Map to store errors
    */
-  queueForIdlePreload(remotes, onLoaded, onError) {
+  queueForIdlePreload(remotes, results, errors) {
     if ('requestIdleCallback' in window) {
       requestIdleCallback(
         () => {
-          this.preloadNext(remotes, onLoaded, onError);
+          this.preloadNext(remotes, results, errors);
         },
         { timeout: 5000 },
       );
     } else {
       // Fallback for Safari
-      setTimeout(() => this.preloadNext(remotes, onLoaded, onError), 1000);
+      setTimeout(() => this.preloadNext(remotes, results, errors), 1000);
     }
   }
 
   /**
-   * Preload next remote in queue
+   * Load next remote in queue
    * @param {Array<{ name: string, priority: string }>} remotes
-   * @param {(name: string, mod: any) => void} [onLoaded]
-   * @param {(name: string, error: unknown) => void} [onError]
+   * @param {Map<string, any>} results - Map to store loaded modules
+   * @param {Map<string, Error>} errors - Map to store errors
    */
-  async preloadNext(remotes, onLoaded, onError) {
+  async preloadNext(remotes, results, errors) {
     if (this.isPreloading || remotes.length === 0) return;
 
     this.isPreloading = true;
@@ -130,31 +147,27 @@ class StrategicLoader {
 
     const start = performance.now();
     console.log(
-      `[StrategicLoader] [START] ${next.name} (${next.priority}) idle preload`,
+      `[StrategicLoader] [START] ${next.name} (${next.priority}) idle load`,
     );
 
     try {
       const mod = await this.invoker(next.name);
       const duration = performance.now() - start;
       console.log(
-        `[StrategicLoader] [DONE] ${next.name} (${next.priority}) idle preloaded in ${duration.toFixed(
+        `[StrategicLoader] [DONE] ${next.name} (${next.priority}) idle loaded in ${duration.toFixed(
           2,
         )}ms`,
       );
-      if (onLoaded) {
-        onLoaded(next.name, mod);
-      }
+      results.set(next.name, mod);
     } catch (error) {
-      console.warn(`Preload failed for ${next.name}:`, error);
-      if (onError) {
-        onError(next.name, error);
-      }
+      console.warn(`Load failed for ${next.name}:`, error);
+      errors.set(next.name, error);
     }
 
     this.isPreloading = false;
 
     if (remotes.length > 0) {
-      this.queueForIdlePreload(remotes, onLoaded, onError);
+      this.queueForIdlePreload(remotes, results, errors);
     }
   }
 }

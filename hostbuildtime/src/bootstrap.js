@@ -29,11 +29,11 @@ async function initApp() {
   // const preloadStart = performance.now();
 
   // try {
-  //   const preloader = new StrategicLoader('preloadRemote');
+  //   const preloader = new StrategicLoader();
 
   //   // Configure remotes with priorities
   //   // Change the order and priority here to control preload behavior
-  //   await preloader.loadStrategic([
+  //   await preloader.preloadRemoteStrategic([
   //     { name: 'app3', priority: 'critical' }, // Blocking
   //     { name: 'app2', priority: 'high' }, // Idle time
   //   ]);

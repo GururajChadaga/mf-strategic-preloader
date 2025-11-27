@@ -109,48 +109,49 @@ function HomePage() {
   const [errorApp3, setErrorApp3] = useState(null);
 
   useEffect(() => {
-    const loader = new StrategicLoader("loadRemote");
+    const loader = new StrategicLoader();
 
-    loader.loadStrategic(
-      [
-        { name: "app2/Widget", priority: "low" },
+    loader
+      .loadRemoteStrategic([
+        { name: "app2/Widget", priority: "high" },
         { name: "app3/Widget", priority: "critical" },
-      ],
-      (name, mod) => {
-        const Component = mod?.default;
-        if (!Component) {
-          const err = new Error(
-            `[HomePage] Remote ${name} did not provide a default export`,
+      ])
+      .then((results) => {
+        // Handle app2/Widget
+        const app2Mod = results.get("app2/Widget");
+        if (app2Mod?.default) {
+          setApp2Widget(() => app2Mod.default);
+          setLoadingApp2(false);
+        } else {
+          setErrorApp2(
+            new Error(
+              "[HomePage] app2/Widget did not provide a default export"
+            )
           );
-          if (name === "app2/Widget") {
-            setErrorApp2(err);
-            setLoadingApp2(false);
-          } else if (name === "app3/Widget") {
-            setErrorApp3(err);
-            setLoadingApp3(false);
-          }
-          return;
+          setLoadingApp2(false);
         }
 
-        if (name === "app2/Widget") {
-          setApp2Widget(() => Component);
-          setLoadingApp2(false);
-        } else if (name === "app3/Widget") {
-          setApp3Widget(() => Component);
+        // Handle app3/Widget
+        const app3Mod = results.get("app3/Widget");
+        if (app3Mod?.default) {
+          setApp3Widget(() => app3Mod.default);
+          setLoadingApp3(false);
+        } else {
+          setErrorApp3(
+            new Error(
+              "[HomePage] app3/Widget did not provide a default export"
+            )
+          );
           setLoadingApp3(false);
         }
-      },
-      (name, error) => {
-        console.warn(`[HomePage] Error loading ${name}:`, error);
-        if (name === "app2/Widget") {
-          setErrorApp2(error);
-          setLoadingApp2(false);
-        } else if (name === "app3/Widget") {
-          setErrorApp3(error);
-          setLoadingApp3(false);
-        }
-      },
-    );
+      })
+      .catch((error) => {
+        console.error("[HomePage] Error loading remotes:", error);
+        setErrorApp2(error);
+        setErrorApp3(error);
+        setLoadingApp2(false);
+        setLoadingApp3(false);
+      });
   }, []);
 
   return (
